@@ -12,19 +12,24 @@ object StatComma {
   object Tags {
     def Domain = "Domain"
     def MainDomain = "MainDomain"
-    def SubDomainRecord = "SubDomainRecord"
+    def Name = "Name"
     def RecordType = "RecordType"
-    def Value = "Value"
+    def SubDomainRecord = "SubDomainRecord"
     def SubHost = "Subhost"
+    def Value = "Value"
   }
 
   object Commands {
     def ListDomains = "list_domain"
   }
 
-  case class DomainRecord(recordType: String, value: String)
+  case class MainDomainRecord(recordType: String, value: String)
 
-  case class SubDomainRecord(subHost: String, recordType: String, value: String)
+  case class SubDomainRecord(recordType: String, value: String, subHost: String)
+
+  case class DomainRecord(name: String, mainDomain: MainDomainRecord, subDomains: Seq[SubDomainRecord]) {
+    override def toString: String = s"$name:\nDomain Record: $mainDomain\nSubdomain Records: ${subDomains}"
+  }
 
   def baseURL = "https://api.dynadot.com/api3.xml"
 
@@ -46,11 +51,11 @@ object StatComma {
     tagNode.head.text
   }
 
-  def getMainDomainRecord(domain: xml.Node): DomainRecord = {
+  def getMainDomainRecord(domain: xml.Node): MainDomainRecord = {
     val mainDomainXML = domain \\ Tags.MainDomain
     val recordType = getTagText(mainDomainXML, Tags.RecordType)
     val value = getTagText(mainDomainXML, Tags.Value)
-    DomainRecord(recordType, value)
+    MainDomainRecord(recordType, value)
   }
 
   def getSubDomainRecord(subDomain: xml.Node): SubDomainRecord = {
@@ -60,21 +65,30 @@ object StatComma {
     }
   }
 
+  def getDomainName(domainXML: xml.NodeSeq): String = {
+    getTagText(domainXML, Tags.Name)
+  }
+
   def getSubDomainRecords(domainXML: xml.NodeSeq): Seq[SubDomainRecord] = {
     val subDomains = domainXML \\ Tags.SubDomainRecord
-    println(subDomains.size)
     subDomains.map(getSubDomainRecord)
   }
 
-  def getDomainRecord(domainXml: xml.Node): (DomainRecord, Seq[SubDomainRecord]) = {
-    val mainDomain = getMainDomainRecord(domainXml)
-    val subDomains = getSubDomainRecords(domainXml)
-    (mainDomain, subDomains)
+  def getDomainXMLs(domainListXML: xml.NodeSeq) = {
+    domainListXML \\ Tags.Domain
   }
 
-  def listDomains: Seq[(DomainRecord, Seq[SubDomainRecord])] = {
+  def getDomainRecord(domainXml: xml.Node): DomainRecord = {
+    val name = getDomainName(domainXml)
+    val mainDomain = getMainDomainRecord(domainXml)
+    val subDomains = getSubDomainRecords(domainXml)
+    DomainRecord(name, mainDomain, subDomains)
+  }
+
+  def listDomains: Seq[DomainRecord] = {
     val domainListXML = runCommand(Commands.ListDomains)
-    domainListXML.map(getDomainRecord)
+    val domainXMLs = getDomainXMLs(domainListXML)
+    domainXMLs.map(getDomainRecord)
   }
 
 }
